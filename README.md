@@ -28,9 +28,9 @@ All 3 roles support instant one-click demo login on their respective login scree
 ### 1. Dynamic Rate Calculation Engine (No Hardcoding)
 * **Zone Detection:** Automatic resolution of 6-digit Indian postal codes into service areas and delivery zones (with fallback to `UNIV` Universal zone).
 * **Volumetric Weight Calculation:** Calculated using the standard logistics formula:
-  $$\text{Volumetric Weight (kg)} = \frac{L \times B \times H}{5000}$$
+* **Volumetric Weight (kg):** `(L x B x H) / 5000`
 * **Billable Weight:** Higher of Actual Weight vs. Volumetric Weight, rounded up to the nearest configured increment (e.g. 500g steps).
-* **Directional Rate Cards:** Dynamically selects active rate cards based on Pickup Zone $\to$ Drop Zone, separated by order type (**B2B** and **B2C**).
+* **Directional Rate Cards:** Dynamically selects active rate cards based on Pickup Zone ➔ Drop Zone, separated by order type (**B2B** and **B2C**).
 * **COD Surcharges:** Applies configurable Cash-on-Delivery surcharge when payment method is `COD`.
 * **Live Pre-Confirmation Quote:** Itemized breakdown (Base Charge, Additional Weight Charge, COD Surcharge, Total) presented before order confirmation.
 
@@ -44,8 +44,8 @@ All 3 roles support instant one-click demo login on their respective login scree
 
 ### 3. Immutable Order Status Lifecycle
 * Status transition state machine:
-  $$\text{PLACED} \longrightarrow \text{ASSIGNED} \longrightarrow \text{PICKED\_UP} \longrightarrow \text{IN\_TRANSIT} \longrightarrow \text{OUT\_FOR\_DELIVERY} \longrightarrow \text{DELIVERED}$$
-  $$\text{OUT\_FOR\_DELIVERY} \longrightarrow \text{FAILED} \longrightarrow \text{RESCHEDULED} \longrightarrow \text{ASSIGNED}$$
+  * `PLACED` ➔ `ASSIGNED` ➔ `PICKED_UP` ➔ `IN_TRANSIT` ➔ `OUT_FOR_DELIVERY` ➔ `DELIVERED`
+  * `OUT_FOR_DELIVERY` ➔ `FAILED` ➔ `RESCHEDULED` ➔ `ASSIGNED`
 * **Immutable Audit Trail:** Every status transition writes an immutable event into `order_events` with timestamp, actor UUID, role, notes, and failure reasons.
 * **Admin Overrides:** Admins can override statuses when required with mandatory audit trail logging.
 
@@ -84,18 +84,18 @@ LastMile uses Next.js (App Router) combined with Supabase PostgreSQL as a transa
 ```
 
 ### Rate Calculation & Zone Resolution
-1. The client passes postal codes, $L \times B \times H$ in cm, actual weight in kg, order type (`B2B`/`B2C`), and payment type (`PREPAID`/`COD`).
+1. The client passes postal codes, L x B x H in cm, actual weight in kg, order type (`B2B`/`B2C`), and payment type (`PREPAID`/`COD`).
 2. `lookup_postal_code_zone` maps 6-digit codes to their service zone (`NORTH`, `SOUTH`, `WEST`, or `UNIV`).
 3. Volumetric weight is calculated using the database-stored divisor (`5000`).
-4. Billable weight is calculated: $\max(\text{actual}, \text{volumetric})$, rounded to 500g increments.
-5. The matching directional rate card (`pickup_zone_id` $\to$ `drop_zone_id` + `order_type`) supplies the base weight/charge and incremental step charges.
+4. Billable weight is calculated: max(actual, volumetric), rounded to 500g increments.
+5. The matching directional rate card (`pickup_zone_id` ➔ `drop_zone_id` + `order_type`) supplies the base weight/charge and incremental step charges.
 6. If `payment_type = 'COD'`, the active COD surcharge is added. The confirmed calculation is frozen into `order_pricing_snapshots`.
 
 ### Auto-Assignment Logic
 1. Filters active delivery agents with status `AVAILABLE`.
 2. Prioritizes agents assigned to the pickup zone.
 3. If real-time agent GPS coordinates and service area coordinates exist, candidates are sorted using the Haversine spherical formula:
-   $$d = 2R \arcsin\left(\sqrt{\sin^2\left(\frac{\Delta \phi}{2}\right) + \cos(\phi_1)\cos(\phi_2)\sin^2\left(\frac{\Delta \lambda}{2}\right)}\right)$$
+   `d = 2R * arcsin(sqrt(sin²(Δφ/2) + cos(φ₁) * cos(φ₂) * sin²(Δλ/2)))`
 4. The database locks the chosen agent, updates availability to `BUSY`, and creates a `delivery_assignments` row atomically.
 
 ### Failed Delivery Handling
@@ -181,7 +181,7 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 1. **Customer Order Creation:**
    * Sign in as Customer (`/login/customer` ➔ One-click demo login).
-   * Click **Create order**, enter pickup PIN `535002` and drop PIN `600127`, dimensions $20 \times 15 \times 10$ cm, weight $2.5$ kg.
+   * Click **Create order**, enter pickup PIN `535002` and drop PIN `600127`, dimensions 20 x 15 x 10 cm, weight 2.5 kg.
    * Click **Calculate delivery charge** to see the itemized breakdown.
    * Fill recipient contact details and click **Confirm order**.
 2. **Admin Assignment:**
