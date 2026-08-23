@@ -1,0 +1,2 @@
+-- Development data is stored in migration 20260821000400_seed_development_data.sql.
+-- Keep this file intentionally empty so a CLI database reset does not duplicate rates.
