@@ -63,9 +63,7 @@ LastMile is a role-based delivery management platform for quoting, creating, ass
 ### 1. Install dependencies
 
 ```bash
-cd /Users/rushikesh/Desktop/last-mile
-nvm use 22
-npm ci
+npm install
 ```
 
 ### 2. Configure environment values

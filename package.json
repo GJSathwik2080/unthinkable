@@ -11,8 +11,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "bootstrap:guests": "node --env-file=.env.local scripts/bootstrap-guest-users.mjs",
-    "verify:auth": "node --env-file=.env.local scripts/verify-auth-setup.mjs"
+    "bootstrap:guests": "node --experimental-websocket --env-file=.env.local scripts/bootstrap-guest-users.mjs",
+    "verify:auth": "node --experimental-websocket --env-file=.env.local scripts/verify-auth-setup.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",
