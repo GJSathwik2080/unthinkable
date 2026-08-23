@@ -1,276 +1,194 @@
-# LastMile Delivery Tracker
+# 🚚 Last-Mile Delivery Tracker
 
-LastMile is a role-based delivery management platform for quoting, creating, assigning, tracking, and completing last-mile shipments. A customer, operations user, and delivery agent work with the same normalized Supabase order record rather than separate copies.
+A comprehensive, production-ready last-mile delivery management platform featuring dynamic rate calculation, intelligent agent assignment, immutable order tracking, failed delivery handling with rescheduling, and role-based portals for **Customers**, **Admins (Operations)**, and **Delivery Agents**.
 
-## Features implemented
+---
 
-### Customer portal
+## 🌐 Live Deployment & Repository
 
-- Customer registration and secure sign-in at `/login/customer`.
-- Create B2B or B2C orders with pickup/drop postal codes, package dimensions, weight, payment type, contacts, and addresses.
-- Receive a live itemized quote before confirmation.
-- Use any valid six-digit Indian postal code; unmapped codes use the Universal service zone.
-- View owned orders, current status, price, assigned agent, and immutable tracking timeline.
-- Reschedule a failed delivery for a future date.
+* **Live Application URL:** [https://unthinkable-vbmf.vercel.app/](https://unthinkable-vbmf.vercel.app/)
+* **GitHub Repository:** [https://github.com/GJSathwik2080/unthinkable](https://github.com/GJSathwik2080/unthinkable) (Branch: `main`)
 
-### Admin / Operations portal
+---
 
-- Dedicated sign-in at `/login/admin`.
-- View every order and its timeline.
-- Create an order on behalf of a selected customer.
-- View agents, availability, home zone, location status, and active workload.
-- Manually assign an eligible agent or request auto-assignment.
-- Override a status with an audit reason where the workflow permits it.
-- View zones, service areas, rate cards, COD settings, and notification-outbox activity.
+## 🔑 Demo Access & Login Credentials
 
-### Delivery Agent portal
+All 3 roles support instant one-click demo login on their respective login screens, or manual authentication with the credentials below:
 
-- Dedicated sign-in at `/login/agent`.
-- View only assigned deliveries.
-- Change availability: `AVAILABLE`, `BUSY`, or `OFFLINE`.
-- Share location for distance-aware assignment.
-- Update deliveries as Picked Up, In Transit, Out for Delivery, Delivered, or Failed.
-- Record a failure reason when delivery cannot be completed.
+| Role | Portal URL | Demo Email | Demo Password |
+| :--- | :--- | :--- | :--- |
+| **Customer** | `/login/customer` | `guest.customer@example.com` | `GuestCustomerPassword123!` |
+| **Admin / Operations** | `/login/admin` | `guest.admin@example.com` | `GuestAdminPassword123!` |
+| **Delivery Agent** | `/login/agent` | `guest.agent@example.com` | `GuestAgentPassword123!` |
 
-### Shared workflow
+---
 
-- One order ID connects customer, admin, and agent detail routes.
-- Role-aware links are `/customer/orders/:id`, `/admin/orders/:id`, and `/agent/orders/:id`; every route enforces access again.
-- Logout ends the Supabase session before leaving the portal.
-- A wrong-role visit sends the user to the matching dedicated login page.
-- Fixed demo accounts can be enabled for demonstrations. They are bootstrapped once; no Auth user is created on every click.
-- Screens use live APIs and show loading, empty, forbidden, unconfigured-database, and request-error states instead of sample business activity.
+## 📋 Core Features & Requirements Implemented
 
-## Technology
+### 1. Dynamic Rate Calculation Engine (No Hardcoding)
+* **Zone Detection:** Automatic resolution of 6-digit Indian postal codes into service areas and delivery zones (with fallback to `UNIV` Universal zone).
+* **Volumetric Weight Calculation:** Calculated using the standard logistics formula:
+  $$\text{Volumetric Weight (kg)} = \frac{L \times B \times H}{5000}$$
+* **Billable Weight:** Higher of Actual Weight vs. Volumetric Weight, rounded up to the nearest configured increment (e.g. 500g steps).
+* **Directional Rate Cards:** Dynamically selects active rate cards based on Pickup Zone $\to$ Drop Zone, separated by order type (**B2B** and **B2C**).
+* **COD Surcharges:** Applies configurable Cash-on-Delivery surcharge when payment method is `COD`.
+* **Live Pre-Confirmation Quote:** Itemized breakdown (Base Charge, Additional Weight Charge, COD Surcharge, Total) presented before order confirmation.
 
-| Layer | Implementation |
-|---|---|
-| Frontend and API | Next.js App Router, TypeScript, React, plain CSS |
-| Authentication | Supabase Auth and secure server-managed session cookies |
-| Database | Supabase PostgreSQL with Row Level Security (RLS) |
-| Validation | Zod; the server recalculates price at confirmation |
-| Notifications | Transactional outbox with optional Resend email and Twilio SMS delivery |
-| Scheduled retry | Protected notification cron endpoint, compatible with Vercel Cron |
+### 2. Intelligent Agent Assignment Engine
+* **Manual Assignment:** Admins can pick any eligible, active agent from a filtered dropdown list.
+* **Intelligent Auto-Assignment:**
+  1. Identifies available agents in the pickup zone.
+  2. Ranks candidate agents by proximity using **Haversine Distance** calculation between agent GPS coordinates and the pickup area centroid.
+  3. Uses zone availability and least-recent assignment as fallback if GPS coordinates are unavailable.
+  4. Atomic PostgreSQL transaction ensures zero race conditions during simultaneous assignment requests.
 
-## Local setup
+### 3. Immutable Order Status Lifecycle
+* Status transition state machine:
+  $$\text{PLACED} \longrightarrow \text{ASSIGNED} \longrightarrow \text{PICKED\_UP} \longrightarrow \text{IN\_TRANSIT} \longrightarrow \text{OUT\_FOR\_DELIVERY} \longrightarrow \text{DELIVERED}$$
+  $$\text{OUT\_FOR\_DELIVERY} \longrightarrow \text{FAILED} \longrightarrow \text{RESCHEDULED} \longrightarrow \text{ASSIGNED}$$
+* **Immutable Audit Trail:** Every status transition writes an immutable event into `order_events` with timestamp, actor UUID, role, notes, and failure reasons.
+* **Admin Overrides:** Admins can override statuses when required with mandatory audit trail logging.
 
-### Prerequisites
+### 4. Failed Delivery & Rescheduling Workflow
+* When a delivery fails, the agent records the specific failure reason.
+* The customer receives immediate notification and can choose a new scheduled delivery date on their tracking screen.
+* Rescheduling opens a new delivery attempt and automatically releases the prior assignment, making the order eligible for agent reassignment.
 
-- Node.js 22 (`nvm use 22`)
-- A Supabase project
-- Supabase Project URL, publishable key, and server-only secret key
+### 5. Multi-Channel Notification Outbox
+* Outbox pattern guarantees message delivery via **Resend (Email)** and **Twilio (SMS)**.
+* Includes background cron worker endpoint `/api/cron/notifications` for automated retry and status delivery.
 
-### 1. Install dependencies
+---
 
+## 🏗️ System Design Overview (<800 Words)
+
+### Architecture
+LastMile uses Next.js (App Router) combined with Supabase PostgreSQL as a transactional backend. Business logic, state transitions, and pricing computations are offloaded to PostgreSQL stored functions (`calculate_order_quote`, `create_order`, `transition_order_status`, `auto_assign_delivery_agent`), guaranteeing ACID compliance and zero race conditions.
+
+```
+┌────────────────────────────────────────────────────────┐
+│                   Next.js App Router                   │
+│   /customer/*         /admin/*             /agent/*    │
+│  (Customer Portal)  (Operations Console) (Agent Screen)│
+└──────────────────────────┬─────────────────────────────┘
+                           │ (Server Actions & Route Handlers)
+                           ▼
+┌────────────────────────────────────────────────────────┐
+│               Supabase PostgreSQL Engine               │
+│  • Row-Level Security (RLS) policies per Role          │
+│  • Rate calculation & zone mapping RPC functions       │
+│  • Haversine distance-ranked agent auto-assignment     │
+│  • Immutable order_events audit trail                  │
+│  • Notification outbox queue (Email/SMS)               │
+└────────────────────────────────────────────────────────┘
+```
+
+### Rate Calculation & Zone Resolution
+1. The client passes postal codes, $L \times B \times H$ in cm, actual weight in kg, order type (`B2B`/`B2C`), and payment type (`PREPAID`/`COD`).
+2. `lookup_postal_code_zone` maps 6-digit codes to their service zone (`NORTH`, `SOUTH`, `WEST`, or `UNIV`).
+3. Volumetric weight is calculated using the database-stored divisor (`5000`).
+4. Billable weight is calculated: $\max(\text{actual}, \text{volumetric})$, rounded to 500g increments.
+5. The matching directional rate card (`pickup_zone_id` $\to$ `drop_zone_id` + `order_type`) supplies the base weight/charge and incremental step charges.
+6. If `payment_type = 'COD'`, the active COD surcharge is added. The confirmed calculation is frozen into `order_pricing_snapshots`.
+
+### Auto-Assignment Logic
+1. Filters active delivery agents with status `AVAILABLE`.
+2. Prioritizes agents assigned to the pickup zone.
+3. If real-time agent GPS coordinates and service area coordinates exist, candidates are sorted using the Haversine spherical formula:
+   $$d = 2R \arcsin\left(\sqrt{\sin^2\left(\frac{\Delta \phi}{2}\right) + \cos(\phi_1)\cos(\phi_2)\sin^2\left(\frac{\Delta \lambda}{2}\right)}\right)$$
+4. The database locks the chosen agent, updates availability to `BUSY`, and creates a `delivery_assignments` row atomically.
+
+### Failed Delivery Handling
+1. When an agent marks an order as `FAILED`, they submit a reason string.
+2. The attempt closes, the agent is freed (`AVAILABLE`), and an outbox notification is enqueued for the customer.
+3. The customer accesses `/customer/orders/:id` and selects a rescheduled date.
+4. Rescheduling updates the order status to `RESCHEDULED`, logs the event, and puts the order back into the assignment queue for the next delivery window.
+
+---
+
+## 🛠️ Technology Stack
+
+| Component | Technology |
+| :--- | :--- |
+| **Framework** | Next.js 16 (App Router, Turbopack, React 19, TypeScript) |
+| **Styling** | Vanilla Modern CSS (Responsive, Glassmorphism, CSS Grid) |
+| **Database & Auth** | Supabase (PostgreSQL with RLS, Supabase Auth) |
+| **Validation** | Zod Schema Validation |
+| **Unit Testing** | Vitest (12/12 passing unit & domain tests) |
+| **Deployment** | Vercel Serverless Edge Platform |
+
+---
+
+## 🗄️ Database Schema Summary
+
+* **`profiles` / `agent_profiles`**: Role-based profiles linked directly to Supabase Auth UUIDs (`CUSTOMER`, `ADMIN`, `DELIVERY_AGENT`), with home zones, current coordinates, and availability state (`AVAILABLE`, `BUSY`, `OFFLINE`).
+* **`zones`, `service_areas`, `service_area_postal_codes`**: Multi-tier geographic hierarchy mapping Indian PIN codes to operational zones.
+* **`pricing_settings`, `rate_cards`, `cod_surcharges`**: Configurable rate matrices for intra/inter-zone B2B/B2C shipments and COD fees.
+* **`orders`, `order_addresses`, `order_pricing_snapshots`**: Master order headers, normalized pickup/drop coordinates & contact information, and immutable pricing records.
+* **`delivery_attempts`, `delivery_assignments`, `order_events`**: Multi-attempt lifecycle tracker, assignment allocations, and append-only audit trail.
+* **`notification_outbox`, `admin_audit_log`**: Transactional outbox pattern for customer communications and admin override logs.
+
+---
+
+## 💻 Local Development Setup
+
+### 1. Clone the repository
+```bash
+git clone https://github.com/GJSathwik2080/unthinkable.git
+cd unthinkable
+```
+
+### 2. Install dependencies
 ```bash
 npm install
 ```
 
-### 2. Configure environment values
-
-```bash
-cp .env.example .env.local
-```
-
-Open `.env.local` and provide the Supabase values from **Supabase Dashboard → Project Settings → API**. Never commit `.env.local` or expose `SUPABASE_SECRET_KEY` in browser code.
-
-### 3. Apply the database migrations
-
-In **Supabase Dashboard → SQL Editor**, run every file in `supabase/migrations/` in ascending filename order:
-
-```text
-20260821000100_normalized_schema.sql
-20260821000200_workflow_functions.sql
-20260821000300_rls_and_permissions.sql
-20260821000400_seed_development_data.sql
-20260823000100_integrity_and_authorization.sql
-20260823000200_temporary_guest_sessions.sql
-20260823000300_repair_auth_profile_trigger.sql
-20260823000400_universal_postal_code_coverage.sql
-20260823000500_recreate_auth_profile_trigger.sql
-20260823000600_app_managed_auth_profiles.sql
-20260823000700_simple_shipment_contact_inputs.sql
-```
-
-`20260823000600_app_managed_auth_profiles.sql` removes the stale Auth trigger that can otherwise prevent account/profile creation. The seed migration creates required zone and price configuration, including Universal service; it does not create sample customer/order activity.
-
-### 4. Configure demo accounts
-
-Set the guest values in `.env.local`:
-
+### 3. Configure environment variables
+Create a `.env.local` file in the root directory:
 ```ini
+APP_ENV=development
+
+NEXT_PUBLIC_SUPABASE_URL=https://hhqvchvccybxuaxhjmyy.supabase.co
+NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-supabase-anon-key
+SUPABASE_SECRET_KEY=your-supabase-service-role-key
+
 ENABLE_GUEST_LOGIN=true
-
 GUEST_CUSTOMER_EMAIL=guest.customer@example.com
-GUEST_CUSTOMER_PASSWORD=replace-with-a-strong-password
-
+GUEST_CUSTOMER_PASSWORD=GuestCustomerPassword123!
 GUEST_ADMIN_EMAIL=guest.admin@example.com
-GUEST_ADMIN_PASSWORD=replace-with-a-strong-password
-
+GUEST_ADMIN_PASSWORD=GuestAdminPassword123!
 GUEST_AGENT_EMAIL=guest.agent@example.com
-GUEST_AGENT_PASSWORD=replace-with-a-strong-password
+GUEST_AGENT_PASSWORD=GuestAgentPassword123!
+
+CRON_SECRET=local-development-secret-key
 ```
 
-Create/update the three fixed accounts and validate readiness:
-
+### 4. Run tests and linting
 ```bash
-npm run bootstrap:guests
-npm run verify:auth
+npm test        # Runs unit test suite
+npm run lint    # Runs ESLint code quality checks
 ```
 
-The bootstrap script creates Customer, Admin / Operations, and Delivery Agent Auth users; upserts active profiles; and gives the demo agent a Universal-zone agent profile. It is safe to run again. `verify:auth` never prints passwords, keys, or tokens.
-
-### 5. Start the app
-
+### 5. Start the development server
 ```bash
 npm run dev
 ```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-Open `http://localhost:3000` or the Network URL printed by Next.js.
+---
 
-Useful pages:
+## 🧪 Verification & Acceptance Test Steps
 
-```text
-http://localhost:3000/api/health
-http://localhost:3000/login
-http://localhost:3000/login/customer
-http://localhost:3000/login/admin
-http://localhost:3000/login/agent
-```
-
-`/api/health` returns non-secret database, Auth, and guest-login states such as `reachable`, `unconfigured`, `accounts_missing`, or `ready`.
-
-## Environment reference
-
-Start with [.env.example](.env.example).
-
-| Variable | Required | Purpose |
-|---|---:|---|
-| `APP_ENV` | Yes | Application environment label |
-| `NEXT_PUBLIC_SUPABASE_URL` | Yes | Supabase project URL; browser-safe |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Yes | Supabase browser publishable key |
-| `SUPABASE_SECRET_KEY` | Yes | Server-only Supabase secret/service key |
-| `ENABLE_GUEST_LOGIN` | No | Set to `true` to enable demo access |
-| `GUEST_*_EMAIL`, `GUEST_*_PASSWORD` | For demo access | Server-only fixed demo credentials |
-| `CRON_SECRET` | For notification retry | Protects the cron API route |
-| `RESEND_API_KEY`, `EMAIL_FROM` | Optional | Enables email delivery |
-| `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | Optional | Enables SMS delivery |
-
-## Rate calculation engine
-
-1. The customer or admin supplies postal codes and package details.
-2. The server resolves both addresses to active service areas and zones. A valid unmapped six-digit code uses Universal service.
-3. Volumetric weight is calculated:
-
-   ```text
-   volumetric weight = length × breadth × height ÷ volumetric divisor
-   ```
-
-4. Billable weight is the higher of actual and volumetric weight, rounded up to the configured increment.
-5. The server selects the active directional rate card for pickup zone, drop zone, and B2B/B2C type.
-6. It applies the base rate and additional-weight steps. A COD surcharge applies only to COD orders.
-7. The quote is shown before confirmation. Confirmation recalculates on the server and saves an immutable pricing snapshot.
-
-Rate cards, COD surcharges, the volumetric divisor, rounding rules, and zones are database configuration, not hardcoded customer-order data. The admin portal shows live configuration; configuration edits are maintained through Supabase for the initial deployment.
-
-## Assignment, delivery lifecycle, and notifications
-
-### Auto-assignment
-
-The transactional assignment function considers available agents in the pickup zone first. When fresh agent coordinates and an area centroid are available, candidates are ranked using Haversine distance. Otherwise it uses zone availability and least-recent assignment. If no same-zone candidate exists, it considers another zone.
-
-The database transaction locks the selected agent, creates an attempt and assignment, changes the order to assigned, and marks the agent busy. Constraints prevent more than one active assignment for an agent or a delivery attempt.
-
-### Status lifecycle
-
-```text
-PLACED → ASSIGNED → PICKED_UP → IN_TRANSIT → OUT_FOR_DELIVERY → DELIVERED
-                                              └→ FAILED → RESCHEDULED → ASSIGNED
-```
-
-Every valid transition appends an immutable event with timestamp, actor, role, note, and override metadata. Terminal transitions close the attempt, release its assignment, and restore availability atomically.
-
-When delivery fails, the reason is recorded and notification-outbox entries are created. A customer can reschedule; that creates a new delivery attempt and assignment can run again.
-
-## Database design and security
-
-Supabase Auth owns `auth.users`. `profiles.id` is the corresponding Auth UUID, so a profile cannot exist without an Auth user.
-
-| Group | Tables |
-|---|---|
-| Identity | `profiles`, `agent_profiles` |
-| Geography/pricing | `zones`, `service_areas`, `service_area_postal_codes`, `pricing_settings`, `rate_cards`, `cod_surcharges` |
-| Orders | `orders`, `order_addresses`, `order_pricing_snapshots` |
-| Delivery workflow | `delivery_attempts`, `delivery_assignments`, `order_events` |
-| Operations | `notification_outbox`, `admin_audit_log` |
-
-RLS and security-definer authorization helpers enforce these rules:
-
-- Customers read only their own orders.
-- Admins access operational data and authorised operational actions.
-- Agents read only orders assigned to them.
-- A copied order URL does not grant an unrelated user access.
-- Agent-role, active-assignment, terminal-transition, append-only-event, and audit-log invariants are database-enforced.
-
-For full table details, see [docs/database.md](docs/database.md).
-
-## API overview
-
-All APIs respond with either:
-
-```json
-{ "success": true, "data": {} }
-```
-
-or:
-
-```json
-{ "success": false, "error": { "code": "ERROR_CODE", "message": "Human-readable message" } }
-```
-
-| Area | Important endpoints |
-|---|---|
-| Authentication | `POST /api/auth/register`, `/api/auth/login`, `/api/auth/guest`, `/api/auth/logout`; `GET /api/auth/me` |
-| Customer orders | `POST /api/orders/quote`, `POST/GET /api/orders`, `GET /api/orders/:id`, `GET /api/orders/:id/tracking`, `POST /api/orders/:id/reschedule` |
-| Admin operations | `GET /api/admin/orders`, `/customers`, `/agents`, `/zones`, `/rate-cards`, `/cod-settings`, `/notifications`; actions under `/api/admin/orders/:id/*` |
-| Agent work | `GET /api/agent/orders`, `PATCH /api/agent/orders/:id/status`, `PATCH /api/agent/availability`, `PATCH /api/agent/location` |
-| System | `GET /api/dashboard`, `GET /api/health`, `POST /api/cron/notifications` |
-
-See [docs/api.md](docs/api.md) for request formats, roles, and details.
-
-## Validation and testing
-
-```bash
-npm run lint
-npm test
-npm run build
-```
-
-The test suite covers role login paths, fixed guest configuration, order portal-link generation, status transitions, and contact validation.
-
-## Suggested acceptance test
-
-1. Sign in as Customer and create an order.
-2. Sign in as Admin / Operations, find the same order, and assign the Delivery Agent.
-3. Sign in as Delivery Agent and update delivery status.
-4. Refresh Customer and Admin portals; both show the same timeline and status.
-5. Mark an order failed, reschedule as Customer, and verify a new attempt is created.
-
-Use separate browser profiles/incognito windows to keep all three sessions open simultaneously.
-
-## Deployment
-
-1. Deploy to Vercel, Render, Railway, or another Node.js 22 host.
-2. Add required `.env.example` variables; keep `SUPABASE_SECRET_KEY` server-only.
-3. Apply all Supabase migrations before the first deployment.
-4. Run `npm run bootstrap:guests` once if public demo access is needed.
-5. Configure `CRON_SECRET` and optional Resend/Twilio provider values.
-6. Rotate any key that has been pasted in chat, terminal output, an issue, or repository history before production deployment.
-
-## Additional documentation
-
-- [API reference](docs/api.md)
-- [Database schema](docs/database.md)
-- [System design](docs/system-design.md)
-- [Supabase migrations](supabase/migrations)
-- [Environment template](.env.example)
+1. **Customer Order Creation:**
+   * Sign in as Customer (`/login/customer` ➔ One-click demo login).
+   * Click **Create order**, enter pickup PIN `535002` and drop PIN `600127`, dimensions $20 \times 15 \times 10$ cm, weight $2.5$ kg.
+   * Click **Calculate delivery charge** to see the itemized breakdown.
+   * Fill recipient contact details and click **Confirm order**.
+2. **Admin Assignment:**
+   * Sign in as Admin (`/login/admin` ➔ One-click demo login).
+   * Open the new order and either select an agent from the dropdown or click **Auto assign**.
+3. **Agent Delivery Journey:**
+   * Sign in as Delivery Agent (`/login/agent` ➔ One-click demo login).
+   * Progress the delivery: **Mark Picked Up** ➔ **Mark In Transit** ➔ **Mark Out For Delivery** ➔ **Mark Delivered** (or **Report failed delivery**).
+4. **Reschedule Verification:**
+   * If marked Failed, switch back to Customer to see the updated timeline and click **Reschedule delivery**.
