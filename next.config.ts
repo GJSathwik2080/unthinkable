@@ -1,9 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  turbopack: { root: __dirname },
-  distDir: ".build",
-  allowedDevOrigins: ["172.20.181.82"],
+  // Removed distDir: ".build" for Vercel compatibility
+  // Removed hardcoded allowedDevOrigins which is not needed for prod
 };
 
 export default nextConfig;
