@@ -58,6 +58,11 @@ All 3 roles support instant one-click demo login on their respective login scree
 * Outbox pattern guarantees message delivery via **Resend (Email)** and **Twilio (SMS)**.
 * Includes background cron worker endpoint `/api/cron/notifications` for automated retry and status delivery.
 
+### 6. Frictionless Authentication
+* Phone numbers are optional during signup.
+* Email confirmation is disabled by default for faster onboarding.
+* Distinct, easy-to-find role login portals from the homepage.
+
 ---
 
 ## 🏗️ System Design Overview (<800 Words)

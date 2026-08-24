@@ -5,7 +5,13 @@ export default function Home() {
   return (
     <main className="welcome-page">
       <section className="welcome-card">
-        <div className="brand-mark">LM</div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <div className="brand-mark">LM</div>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <Link href="/login" className="button secondary">Sign in</Link>
+            <Link href="/register" className="button primary">Sign up</Link>
+          </div>
+        </div>
         <p className="eyebrow">Delivery operations, made visible</p>
         <h1>Every mile. One calm command center.</h1>
         <p className="welcome-copy">A role-based platform for quoting, assigning, tracking, and completing last-mile deliveries.</p>
