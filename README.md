@@ -13,13 +13,13 @@ A comprehensive, production-ready last-mile delivery management platform featuri
 
 ## 🔑 Demo Access & Login Credentials
 
-All 3 roles support instant one-click demo login on their respective login screens, or manual authentication with the credentials below:
+All 3 roles support instant one-click demo login via the **"Continue as guest..."** button on their respective login screens, or manual authentication with the credentials below:
 
 | Role | Portal URL | Demo Email | Demo Password |
 | :--- | :--- | :--- | :--- |
-| **Customer** | `/login/customer` | `guest.customer@example.com` | `GuestCustomerPassword123!` |
-| **Admin / Operations** | `/login/admin` | `guest.admin@example.com` | `GuestAdminPassword123!` |
-| **Delivery Agent** | `/login/agent` | `guest.agent@example.com` | `GuestAgentPassword123!` |
+| **Customer** | `/login/customer` | `guest.customer@example.com` | `GuestCust#2026Secure` |
+| **Admin / Operations** | `/login/admin` | `guest.admin@example.com` | `GuestAdmin#2026Secure` |
+| **Delivery Agent** | `/login/agent` | `guest.agent@example.com` | `GuestAgent#2026Secure` |
 
 ---
 
@@ -28,8 +28,8 @@ All 3 roles support instant one-click demo login on their respective login scree
 ### 1. Dynamic Rate Calculation Engine (No Hardcoding)
 * **Zone Detection:** Automatic resolution of 6-digit Indian postal codes into service areas and delivery zones (with fallback to `UNIV` Universal zone).
 * **Volumetric Weight Calculation:** Calculated using the standard logistics formula:
-* **Volumetric Weight (kg):** `(L x B x H) / 5000`
-* **Billable Weight:** Higher of Actual Weight vs. Volumetric Weight, rounded up to the nearest configured increment (e.g. 500g steps).
+  * **Volumetric Weight (kg):** `(L x B x H) / 5000`
+  * **Billable Weight:** Higher of Actual Weight vs. Volumetric Weight, rounded up to the nearest configured increment (e.g. 500g steps).
 * **Directional Rate Cards:** Dynamically selects active rate cards based on Pickup Zone ➔ Drop Zone, separated by order type (**B2B** and **B2C**).
 * **COD Surcharges:** Applies configurable Cash-on-Delivery surcharge when payment method is `COD`.
 * **Live Pre-Confirmation Quote:** Itemized breakdown (Base Charge, Additional Weight Charge, COD Surcharge, Total) presented before order confirmation.
@@ -43,7 +43,7 @@ All 3 roles support instant one-click demo login on their respective login scree
   4. Atomic PostgreSQL transaction ensures zero race conditions during simultaneous assignment requests.
 
 ### 3. Immutable Order Status Lifecycle
-* Status transition state machine:
+* **Status transition state machine:**
   * `PLACED` ➔ `ASSIGNED` ➔ `PICKED_UP` ➔ `IN_TRANSIT` ➔ `OUT_FOR_DELIVERY` ➔ `DELIVERED`
   * `OUT_FOR_DELIVERY` ➔ `FAILED` ➔ `RESCHEDULED` ➔ `ASSIGNED`
 * **Immutable Audit Trail:** Every status transition writes an immutable event into `order_events` with timestamp, actor UUID, role, notes, and failure reasons.
@@ -62,6 +62,7 @@ All 3 roles support instant one-click demo login on their respective login scree
 * Phone numbers are optional during signup.
 * Email confirmation is disabled by default for faster onboarding.
 * Distinct, easy-to-find role login portals from the homepage.
+* Built-in guest account bootstrap and health verification tooling.
 
 ---
 
@@ -92,7 +93,7 @@ LastMile uses Next.js (App Router) combined with Supabase PostgreSQL as a transa
 1. The client passes postal codes, L x B x H in cm, actual weight in kg, order type (`B2B`/`B2C`), and payment type (`PREPAID`/`COD`).
 2. `lookup_postal_code_zone` maps 6-digit codes to their service zone (`NORTH`, `SOUTH`, `WEST`, or `UNIV`).
 3. Volumetric weight is calculated using the database-stored divisor (`5000`).
-4. Billable weight is calculated: max(actual, volumetric), rounded to 500g increments.
+4. Billable weight is calculated: `max(actual, volumetric)`, rounded to 500g increments.
 5. The matching directional rate card (`pickup_zone_id` ➔ `drop_zone_id` + `order_type`) supplies the base weight/charge and incremental step charges.
 6. If `payment_type = 'COD'`, the active COD surcharge is added. The confirmed calculation is frozen into `order_pricing_snapshots`.
 
@@ -149,32 +150,46 @@ npm install
 ```
 
 ### 3. Configure environment variables
-Create a `.env.local` file in the root directory:
+Create a `.env.local` file in the root directory.
+
+> **Important:** If your passwords contain special characters like `#`, wrap them in double quotes so that Node.js does not treat them as comments.
+
 ```ini
 APP_ENV=development
 
-NEXT_PUBLIC_SUPABASE_URL=https://hhqvchvccybxuaxhjmyy.supabase.co
+NEXT_PUBLIC_SUPABASE_URL=https://your-supabase-project.supabase.co
 NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=your-supabase-anon-key
 SUPABASE_SECRET_KEY=your-supabase-service-role-key
 
 ENABLE_GUEST_LOGIN=true
 GUEST_CUSTOMER_EMAIL=guest.customer@example.com
-GUEST_CUSTOMER_PASSWORD=GuestCustomerPassword123!
+GUEST_CUSTOMER_PASSWORD="GuestCust#2026Secure"
 GUEST_ADMIN_EMAIL=guest.admin@example.com
-GUEST_ADMIN_PASSWORD=GuestAdminPassword123!
+GUEST_ADMIN_PASSWORD="GuestAdmin#2026Secure"
 GUEST_AGENT_EMAIL=guest.agent@example.com
-GUEST_AGENT_PASSWORD=GuestAgentPassword123!
+GUEST_AGENT_PASSWORD="GuestAgent#2026Secure"
 
-CRON_SECRET=local-development-secret-key
+CRON_SECRET=your-random-cron-secret
 ```
 
-### 4. Run tests and linting
+### 4. Database Setup & Guest Account Bootstrap
+1. Apply the migration scripts in the Supabase SQL Editor (`supabase/all_migrations.sql`).
+2. Run the automated guest user bootstrap script:
+```bash
+npm run bootstrap:guests
+```
+3. Verify authentication readiness:
+```bash
+npm run verify:auth
+```
+
+### 5. Run tests and linting
 ```bash
 npm test        # Runs unit test suite
 npm run lint    # Runs ESLint code quality checks
 ```
 
-### 5. Start the development server
+### 6. Start the development server
 ```bash
 npm run dev
 ```
@@ -182,18 +197,36 @@ Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
+## 🚀 Deployment to Vercel
+
+When deploying to [Vercel](https://vercel.com/):
+
+1. Connect your GitHub repository to Vercel.
+2. In the **Project Settings ➔ Environment Variables**, add the variables from `.env.local`:
+   * `NEXT_PUBLIC_SUPABASE_URL`
+   * `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`
+   * `SUPABASE_SECRET_KEY`
+   * `ENABLE_GUEST_LOGIN` (`true`)
+   * `GUEST_CUSTOMER_EMAIL` & `GUEST_CUSTOMER_PASSWORD`
+   * `GUEST_ADMIN_EMAIL` & `GUEST_ADMIN_PASSWORD`
+   * `GUEST_AGENT_EMAIL` & `GUEST_AGENT_PASSWORD`
+   * `CRON_SECRET`
+3. Trigger a redeploy on Vercel to apply the environment variables.
+
+---
+
 ## 🧪 Verification & Acceptance Test Steps
 
 1. **Customer Order Creation:**
-   * Sign in as Customer (`/login/customer` ➔ One-click demo login).
+   * Sign in as Customer (`/login/customer` ➔ Click **"Continue as guest Customer"**).
    * Click **Create order**, enter pickup PIN `535002` and drop PIN `600127`, dimensions 20 x 15 x 10 cm, weight 2.5 kg.
    * Click **Calculate delivery charge** to see the itemized breakdown.
    * Fill recipient contact details and click **Confirm order**.
 2. **Admin Assignment:**
-   * Sign in as Admin (`/login/admin` ➔ One-click demo login).
+   * Sign in as Admin (`/login/admin` ➔ Click **"Continue as guest Admin / Operations"**).
    * Open the new order and either select an agent from the dropdown or click **Auto assign**.
 3. **Agent Delivery Journey:**
-   * Sign in as Delivery Agent (`/login/agent` ➔ One-click demo login).
+   * Sign in as Delivery Agent (`/login/agent` ➔ Click **"Continue as guest Delivery Agent"**).
    * Progress the delivery: **Mark Picked Up** ➔ **Mark In Transit** ➔ **Mark Out For Delivery** ➔ **Mark Delivered** (or **Report failed delivery**).
 4. **Reschedule Verification:**
    * If marked Failed, switch back to Customer to see the updated timeline and click **Reschedule delivery**.

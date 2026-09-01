@@ -1,3 +1,10 @@
+﻿-- Reset public schema cleanly if running on a new project or retrying
+drop schema if exists public cascade;
+create schema public;
+grant usage on schema public to postgres, anon, authenticated, service_role;
+grant all privileges on all tables in schema public to postgres, anon, authenticated, service_role;
+grant all privileges on all functions in schema public to postgres, anon, authenticated, service_role;
+grant all privileges on all sequences in schema public to postgres, anon, authenticated, service_role;
 -- LastMile normalized schema. auth.users is owned by Supabase Auth.
 create extension if not exists pgcrypto;
 create extension if not exists btree_gist;
@@ -1098,3 +1105,14 @@ alter table public.order_addresses
 alter table public.order_addresses
   add constraint order_addresses_recipient_name_check check (char_length(trim(recipient_name)) >= 1),
   add constraint order_addresses_address_line_1_check check (char_length(trim(address_line_1)) >= 1);
+
+
+-- Grant full table, sequence, and function access to Supabase roles
+grant usage on schema public to postgres, anon, authenticated, service_role;
+grant all on all tables in schema public to postgres, anon, authenticated, service_role;
+grant all on all functions in schema public to postgres, anon, authenticated, service_role;
+grant all on all sequences in schema public to postgres, anon, authenticated, service_role;
+
+alter default privileges in schema public grant all on tables to postgres, anon, authenticated, service_role;
+alter default privileges in schema public grant all on functions to postgres, anon, authenticated, service_role;
+alter default privileges in schema public grant all on sequences to postgres, anon, authenticated, service_role;
